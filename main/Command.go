@@ -11,7 +11,6 @@ import (
 	"github.com/gomarkdown/markdown"
 	"github.com/spf13/viper"
 	"gopkg.in/gomail.v2"
-	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -25,8 +24,8 @@ var commands = map[string]CommandHandler{
 	"!setup":      setup,
 	"!write":      write,
 	"!ping":       ping,
-	"!setmailbox": setmailbox,
-	"!sethtml":    sethtml,
+	"!setmailbox": setMailbox,
+	"!sethtml":    setHtml,
 	"!leave":      leave,
 	"!blocklist":  blocklist,
 	"!bl":         blocklist,
@@ -66,17 +65,16 @@ func logout(evt *event.Event, mesage string) {
 }
 
 func setup(evt *event.Event, message string) {
-	client := matrixClient
 	roomID := evt.RoomID
 	data := strings.Trim(strings.ReplaceAll(message, "!setup", ""), " ")
 	s := strings.Split(data, ",")
 	if len(s) < 4 || len(s) > 6 {
-		client.SendText(roomID, "Wrong syntax :/\r\nExample: \r\n!setup imap, host.com:993, mail@host.com, w0rdp4ss, INBOX, false\r\nor\r\n"+
+		matrixClient.SendText(roomID, "Wrong syntax :/\r\nExample: \r\n!setup imap, host.com:993, mail@host.com, w0rdp4ss, INBOX, false\r\nor\r\n"+
 			"!setup smtp, host.com:587, mail@host.com, w0rdp4ss, false")
 	} else {
 		accountType := s[0]
 		if strings.ToLower(accountType) != "imap" && strings.ToLower(accountType) != "smtp" {
-			client.SendText(roomID, "What? you can setup 'imap' and 'smtp', not \""+accountType+"\"")
+			matrixClient.SendText(roomID, "What? you can setup 'imap' and 'smtp', not \""+accountType+"\"")
 			return
 		}
 		host := strings.ReplaceAll(s[1], " ", "")
@@ -91,7 +89,7 @@ func setup(evt *event.Event, message string) {
 		defaultMailSyncInterval := viper.GetInt("defaultmailCheckInterval")
 		imapAccID, smtpAccID, erro := getRoomAccounts(string(roomID))
 		if erro != nil {
-			client.SendText(roomID, "Something went wrong! Contact the admin. Errorcode: #37")
+			matrixClient.SendText(roomID, "Something went wrong! Contact the admin. Errorcode: #37")
 			WriteLog(critical, "#37 checking getRoomAccounts: "+erro.Error())
 			return
 		}
@@ -104,18 +102,18 @@ func setup(evt *event.Event, message string) {
 				}
 			}
 			if imapAccID != -1 {
-				client.SendText(roomID, "IMAP account already existing. Create a new room if you want to use a different account!")
+				matrixClient.SendText(roomID, "IMAP account already existing. Create a new room if you want to use a different account!")
 				return
 			}
 			isInUse, err := isImapAccountAlreadyInUse(username)
 			if err != nil {
-				client.SendText(roomID, "Something went wrong! Contact the admin. Errorcode: #03")
+				matrixClient.SendText(roomID, "Something went wrong! Contact the admin. Errorcode: #03")
 				WriteLog(critical, "#03 checking isImapAccountAlreadyInUse: "+err.Error())
 				return
 			}
 
 			if isInUse {
-				client.SendText(roomID, "This email is already in Use! You cannot use your email twice!")
+				matrixClient.SendText(roomID, "This email is already in Use! You cannot use your email twice!")
 				return
 			}
 
@@ -128,7 +126,7 @@ func setup(evt *event.Event, message string) {
 				if mclient != nil && err == nil {
 					has, er := hasRoom(string(roomID))
 					if er != nil {
-						client.SendText(roomID, "An error occured! contact your admin! Errorcode: #25")
+						matrixClient.SendText(roomID, "An error occured! contact your admin! Errorcode: #25")
 						WriteLog(critical, "checking imapAcc #25: "+er.Error())
 						return
 					}
@@ -136,7 +134,7 @@ func setup(evt *event.Event, message string) {
 					if !has {
 						newRoomID = insertNewRoom(string(roomID), defaultMailSyncInterval)
 						if newRoomID == -1 {
-							client.SendText(roomID, "An error occured! contact your admin! Errorcode: #26")
+							matrixClient.SendText(roomID, "An error occured! contact your admin! Errorcode: #26")
 							WriteLog(critical, "checking insertNewRoom #26")
 							return
 						}
@@ -144,23 +142,23 @@ func setup(evt *event.Event, message string) {
 						id, err := getRoomPKID(evt.RoomID.String())
 						if err != nil {
 							WriteLog(critical, "checking getRoomPKID #27: "+err.Error())
-							client.SendText(roomID, "An error occured! contact your admin! Errorcode: #27")
+							matrixClient.SendText(roomID, "An error occured! contact your admin! Errorcode: #27")
 							return
 						}
 						newRoomID = int64(id)
 					}
 					imapID, succes := insertimapAccountount(host, username, password, mailbox, ignoreSSlCert)
 					if !succes {
-						client.SendText(roomID, "sth went wrong. Contact your admin")
+						matrixClient.SendText(roomID, "sth went wrong. Contact your admin")
 						return
 					}
 					err = saveImapAcc(string(roomID), int(imapID))
 					if err != nil {
 						WriteLog(critical, "saveImapAcc #35 : "+err.Error())
-						client.SendText(roomID, "sth went wrong. Contact you admin! Errorcode: #35")
+						matrixClient.SendText(roomID, "sth went wrong. Contact you admin! Errorcode: #35")
 						return
 					}
-					client.SendText(roomID, "Bridge created successfully!\r\nYou should delete the message containing your credentials ;)\r\nIMAP:\r\n"+
+					matrixClient.SendText(roomID, "Bridge created successfully!\r\nYou should delete the message containing your credentials ;)\r\nIMAP:\r\n"+
 						"host: "+host+"\r\n"+
 						"username: "+username+"\r\n"+
 						"mailbox: "+mailbox+"\r\n"+
@@ -169,23 +167,23 @@ func setup(evt *event.Event, message string) {
 					startMailListener(imapAccountount{host, username, password, roomID.String(), mailbox, ignoreSSlCert, int(newRoomID), defaultMailSyncInterval, true})
 					WriteLog(success, "Created new bridge and started maillistener\r\n")
 				} else {
-					client.SendText(roomID, "Error creating bridge! Errorcode: #04\r\nReason: "+err.Error())
+					matrixClient.SendText(roomID, "Error creating bridge! Errorcode: #04\r\nReason: "+err.Error())
 					WriteLog(logError, "#04 creating bridge: "+err.Error())
 				}
 			}()
 		} else if accountType == "smtp" {
 			if smtpAccID != -1 {
-				client.SendText(roomID, "SMTP account already existing. Create a new room if you want to use a different account!")
+				matrixClient.SendText(roomID, "SMTP account already existing. Create a new room if you want to use a different account!")
 				return
 			}
 			isInUse, err := isSMTPAccountAlreadyInUse(username)
 			if err != nil {
-				client.SendText(roomID, "Something went wrong! Contact the admin. Errorcode: #24")
+				matrixClient.SendText(roomID, "Something went wrong! Contact the admin. Errorcode: #24")
 				WriteLog(critical, "#24 checking isSMTPAccountAlreadyInUse: "+err.Error())
 				return
 			}
 			if isInUse {
-				client.SendText(roomID, "This smtp-username is already in Use! You cannot use your email twice!")
+				matrixClient.SendText(roomID, "This smtp-username is already in Use! You cannot use your email twice!")
 				return
 			}
 
@@ -199,7 +197,7 @@ func setup(evt *event.Event, message string) {
 				}
 				has, er := hasRoom(roomID.String())
 				if er != nil {
-					client.SendText(roomID, "An error occured! contact your admin! Errorcode: #28")
+					matrixClient.SendText(roomID, "An error occured! contact your admin! Errorcode: #28")
 					WriteLog(critical, "checking imapAcc #28: "+er.Error())
 					return
 				}
@@ -207,7 +205,7 @@ func setup(evt *event.Event, message string) {
 				if !has {
 					newRoomID = insertNewRoom(roomID.String(), defaultMailSyncInterval)
 					if newRoomID == -1 {
-						client.SendText(roomID, "An error occured! contact your admin! Errorcode: #29")
+						matrixClient.SendText(roomID, "An error occured! contact your admin! Errorcode: #29")
 						WriteLog(critical, "checking insertNewRoom #29: ")
 						return
 					}
@@ -215,59 +213,58 @@ func setup(evt *event.Event, message string) {
 					id, err := getRoomPKID(evt.RoomID.String())
 					if err != nil {
 						WriteLog(critical, "checking getRoomPKID #30: "+err.Error())
-						client.SendText(roomID, "An error occured! contact your admin! Errorcode: #30")
+						matrixClient.SendText(roomID, "An error occured! contact your admin! Errorcode: #30")
 						return
 					}
 					newRoomID = int64(id)
 				}
 				port := 587
 				if !strings.Contains(host, ":") {
-					client.SendText(roomID, "No port specified! Using 587")
+					matrixClient.SendText(roomID, "No port specified! Using 587")
 				} else {
 					hostsplit := strings.Split(host, ":")
 					host = hostsplit[0]
 					port, err = strconv.Atoi(strings.Trim(hostsplit[1], " "))
 					if err != nil {
-						client.SendText(roomID, "The port must be a number!")
+						matrixClient.SendText(roomID, "The port must be a number!")
 						return
 					}
 				}
 				smtpID, err := insertSMTPAccountount(host, port, username, password, ignoreSSlCert)
 				if err != nil {
-					client.SendText(roomID, "sth went wrong. Contact your admin")
+					matrixClient.SendText(roomID, "sth went wrong. Contact your admin")
 					return
 				}
 				err = saveSMTPAcc(roomID.String(), int(smtpID))
 				if err != nil {
 					WriteLog(critical, "saveSMTPAcc #36 : "+err.Error())
-					client.SendText(roomID, "sth went wrong. Contact you admin! Errorcode: #34")
+					matrixClient.SendText(roomID, "sth went wrong. Contact you admin! Errorcode: #34")
 					return
 				}
 
-				client.SendText(roomID, "SMTP data saved.\r\nSMTP:\r\n"+
+				matrixClient.SendText(roomID, "SMTP data saved.\r\nSMTP:\r\n"+
 					"host: "+host+"\r\n"+
 					"port: "+strconv.Itoa(port)+"\r\n"+
 					"username: "+username+"\r\n"+
 					"ignoreSSL: "+strconv.FormatBool(ignoreSSlCert))
 			}()
 		} else {
-			client.SendText(roomID, "Not implemented yet!")
+			matrixClient.SendText(roomID, "Not implemented yet!")
 		}
 	}
 }
 
 func write(evt *event.Event, message string) {
-	client := matrixClient
 	roomID := evt.RoomID
 	if has, err := hasRoom(roomID.String()); has && err == nil {
 		_, smtpAccID, erro := getRoomAccounts(roomID.String())
 		if erro != nil {
 			WriteLog(critical, "#38 getRoomAccounts: "+erro.Error())
-			client.SendText(roomID, "An server-error occured Errorcode: #38")
+			matrixClient.SendText(roomID, "An server-error occured Errorcode: #38")
 			return
 		}
 		if smtpAccID == -1 {
-			client.SendText(roomID, "You have to setup an smtp account. Type !help or !login for more information")
+			matrixClient.SendText(roomID, "You have to setup an smtp account. Type !help or !login for more information")
 			return
 		}
 		s := strings.Split(message, " ")
@@ -293,14 +290,14 @@ func write(evt *event.Event, message string) {
 				hasTemp, err := isUserWritingEmail(roomID.String())
 				if err != nil {
 					WriteLog(critical, "#39 isUserWritingEmail: "+err.Error())
-					client.SendText(roomID, "An server-error occured Errorcode: #39")
+					matrixClient.SendText(roomID, "An server-error occured Errorcode: #39")
 					return
 				}
 				if hasTemp {
 					er := deleteWritingTemp(roomID.String())
 					if er != nil {
 						WriteLog(critical, "#40 deleteWritingTemp: "+er.Error())
-						client.SendText(roomID, "An server-error occured Errorcode: #40")
+						matrixClient.SendText(roomID, "An server-error occured Errorcode: #40")
 						return
 					}
 				}
@@ -324,18 +321,18 @@ func write(evt *event.Event, message string) {
 				saveWritingtemp(roomID.String(), "markdown", strconv.Itoa(mrkdwn))
 				if err != nil {
 					WriteLog(critical, "#42 newWritingTemp: "+err.Error())
-					client.SendText(roomID, "An server-error occured Errorcode: #42")
+					matrixClient.SendText(roomID, "An server-error occured Errorcode: #42")
 					return
 				}
-				client.SendText(roomID, "Now send me the subject of your email")
+				matrixClient.SendText(roomID, "Now send me the subject of your email")
 			} else {
-				client.SendText(roomID, "this is an email: max@google.de\r\nthis is no email: "+receiver)
+				matrixClient.SendText(roomID, "this is an email: max@google.de\r\nthis is no email: "+receiver)
 			}
 		} else {
-			client.SendText(roomID, "Usage: !write <emailaddress>")
+			matrixClient.SendText(roomID, "Usage: !write <emailaddress>")
 		}
 	} else {
-		client.SendText(roomID, "You have to login to use this command!")
+		matrixClient.SendText(roomID, "You have to login to use this command!")
 	}
 }
 
@@ -360,13 +357,12 @@ func ping(evt *event.Event, message string) {
 	}
 }
 
-func setmailbox(evt *event.Event, message string) {
-	client := matrixClient
+func setMailbox(evt *event.Event, message string) {
 	roomID := evt.RoomID
 	imapAccID, _, erro := getRoomAccounts(roomID.String())
 	if erro != nil {
 		WriteLog(critical, "#48 getRoomAccounts: "+erro.Error())
-		client.SendText(roomID, "An server-error occured Errorcode: #48")
+		matrixClient.SendText(roomID, "An server-error occured Errorcode: #48")
 		return
 	}
 	if imapAccID != -1 {
@@ -379,27 +375,26 @@ func setmailbox(evt *event.Event, message string) {
 			imapAccount, err := getIMAPAccount(roomID.String())
 			if err != nil {
 				WriteLog(critical, "#49 getIMAPAccount: "+err.Error())
-				client.SendText(roomID, "An server-error occured Errorcode: #49")
+				matrixClient.SendText(roomID, "An server-error occured Errorcode: #49")
 				return
 			}
 			imapAccount.silence = true
 			go startMailListener(*imapAccount)
-			client.SendText(roomID, "Mailbox updated")
+			matrixClient.SendText(roomID, "Mailbox updated")
 		} else {
-			client.SendText(roomID, "Usage: !setmailbox <new mailbox>")
+			matrixClient.SendText(roomID, "Usage: !setmailbox <new mailbox>")
 		}
 	} else {
-		client.SendText(roomID, "You have to setup an IMAP account to use this command. Use !setup or !login for more informations")
+		matrixClient.SendText(roomID, "You have to setup an IMAP account to use this command. Use !setup or !login for more informations")
 	}
 }
 
-func sethtml(evt *event.Event, message string) {
-	client := matrixClient
+func setHtml(evt *event.Event, message string) {
 	roomID := evt.RoomID
 	imapAccID, _, erro := getRoomAccounts(roomID.String())
 	if erro != nil {
 		WriteLog(critical, "#50 getRoomAccounts: "+erro.Error())
-		client.SendText(roomID, "An server-error occured Errorcode: #50")
+		matrixClient.SendText(roomID, "An server-error occured Errorcode: #50")
 		return
 	}
 	if imapAccID != -1 {
@@ -410,47 +405,45 @@ func sethtml(evt *event.Event, message string) {
 			if newMode == "true" || newMode == "on" {
 				newModeB = true
 			} else if newMode != "false" && newMode != "off" {
-				client.SendText(roomID, "What?\r\non/off or true/false")
+				matrixClient.SendText(roomID, "What?\r\non/off or true/false")
 				return
 			}
 			err := setHTMLenabled(roomID.String(), newModeB)
 			if err != nil {
 				WriteLog(critical, "#56 getMailbox: "+err.Error())
-				client.SendText(roomID, "An server-error occured Errorcode: #56")
+				matrixClient.SendText(roomID, "An server-error occured Errorcode: #56")
 				return
 			}
-			client.SendText(roomID, "Successfully set HTML-rendering to "+newMode)
+			matrixClient.SendText(roomID, "Successfully set HTML-rendering to "+newMode)
 		} else {
-			client.SendText(roomID, "Usage: !sethtml (on/of) or (true/false)")
+			matrixClient.SendText(roomID, "Usage: !sethtml (on/of) or (true/false)")
 		}
 	} else {
-		client.SendText(roomID, "You have to setup an IMAP account to use this command. Use !setup or !login for more informations")
+		matrixClient.SendText(roomID, "You have to setup an IMAP account to use this command. Use !setup or !login for more informations")
 	}
 }
 
 func leave(evt *event.Event, message string) {
-	client := matrixClient
 	roomID := evt.RoomID
-	err := logOut(client, roomID.String(), true)
+	err := logOut(matrixClient, roomID.String(), true)
 	if err != nil {
-		client.SendText(roomID, "Error leaving: "+err.Error())
+		matrixClient.SendText(roomID, "Error leaving: "+err.Error())
 	} else {
-		client.SendText(roomID, "Successfully unbridged")
+		matrixClient.SendText(roomID, "Successfully unbridged")
 	}
 }
 
 func blocklist(evt *event.Event, message string) {
-	client := matrixClient
 	roomID := evt.RoomID
 	imapAccID, _, _ := getRoomAccounts(roomID.String())
 	if imapAccID == -1 {
-		client.SendText(roomID, "You need to login with an imap account to use this command!")
+		matrixClient.SendText(roomID, "You need to login with an imap account to use this command!")
 		return
 	}
 	sm := strings.Split(message, " ")
 	if len(sm) < 3 {
 		if len(sm) == 2 && (sm[1] == "view" || sm[1] == "list") {
-			viewBlocklist(roomID.String(), client)
+			viewBlocklist(roomID.String(), matrixClient)
 		} else if len(sm) == 2 && sm[1] == "clear" {
 			err := clearBlocklist(imapAccID)
 			var msg string
@@ -460,15 +453,15 @@ func blocklist(evt *event.Event, message string) {
 			} else {
 				msg = "Blocklist is now clean!"
 			}
-			client.SendText(roomID, msg)
+			matrixClient.SendText(roomID, msg)
 		} else {
-			client.SendText(roomID, "Usage: !blocklist <add/delete/clear/view> <email address>\nDon't show any emails from a given email address.\nWildcards (like *@evilEmailAddress.com) are supported")
+			matrixClient.SendText(roomID, "Usage: !blocklist <add/delete/clear/view> <email address>\nDon't show any emails from a given email address.\nWildcards (like *@evilEmailAddress.com) are supported")
 		}
 	} else {
 		cmd := strings.ToLower(sm[1])
 		addr := sm[2]
 		if !strings.Contains(addr, "@") || !strings.Contains(addr, ".") || len(addr) < 6 {
-			client.SendText(roomID, "Error! "+addr+" is an invalid email address!")
+			matrixClient.SendText(roomID, "Error! "+addr+" is an invalid email address!")
 		} else {
 			switch cmd {
 			case "add":
@@ -482,7 +475,7 @@ func blocklist(evt *event.Event, message string) {
 					} else {
 						msg = "Success adding " + addr + " to blocklist!"
 					}
-					client.SendText(roomID, msg)
+					matrixClient.SendText(roomID, msg)
 				}
 			case "remove", "delete", "rm":
 				{
@@ -494,7 +487,7 @@ func blocklist(evt *event.Event, message string) {
 					} else {
 						msg = "Success deleting " + addr + " from blocklist!"
 					}
-					client.SendText(roomID, msg)
+					matrixClient.SendText(roomID, msg)
 				}
 			}
 		}
@@ -502,38 +495,177 @@ func blocklist(evt *event.Event, message string) {
 }
 
 func view(evt *event.Event, message string) {
-	client := matrixClient
 	roomID := evt.RoomID
 	imapAccID, _, _ := getRoomAccounts(roomID.String())
 	if imapAccID == -1 {
-		client.SendText(roomID, "You need to login with an imap account to use this command!")
+		matrixClient.SendText(roomID, "You need to login with an imap account to use this command!")
 		return
 	}
 	sm := strings.Split(message, " ")
 	if len(sm) == 1 {
-		viewViewHelp(roomID.String(), client)
+		viewViewHelp(roomID.String())
 	} else if len(sm) > 1 {
 		switch strings.ToLower(sm[1]) {
 		case "mb", "mailbox":
 			{
-				viewMailbox(roomID.String(), client)
+				viewMailbox(roomID.String(), matrixClient)
 			}
 		case "mbs", "mailboxes":
 			{
-				viewMailboxes(roomID.String(), client)
+				viewMailboxes(roomID.String(), matrixClient)
 			}
 		case "blocklist", "bl", "blocklists", "blo", "blocked":
 			{
-				viewBlocklist(roomID.String(), client)
+				viewBlocklist(roomID.String(), matrixClient)
 			}
 		case "h", "help":
 			{
-				viewViewHelp(roomID.String(), client)
+				viewViewHelp(roomID.String())
 			}
 		default:
 			{
-				viewViewHelp(roomID.String(), client)
+				viewViewHelp(roomID.String())
 			}
+		}
+	}
+}
+
+func writingEmail(evt *event.Event, message string) {
+	roomID := evt.RoomID
+	writeTemp, err := getWritingTemp(string(roomID))
+	if err != nil {
+		WriteLog(critical, "#43 getWritingTemp: "+err.Error())
+		matrixClient.SendText(roomID, "An server-error occured Errorcode: #43")
+		deleteWritingTemp(string(roomID))
+		return
+	}
+	if len(strings.Trim(writeTemp.subject, " ")) == 0 {
+		if evt.Content.AsMessage().MsgType != event.MsgText {
+			matrixClient.SendText(roomID, "You have to send a text for subject!")
+			return
+		}
+		err = saveWritingtemp(string(roomID), "subject", message)
+		if err != nil {
+			WriteLog(critical, "#44 saveWritingtemp: "+err.Error())
+			matrixClient.SendText(roomID, "An server-error occured Errorcode: #44")
+			deleteWritingTemp(string(roomID))
+			return
+		}
+		matrixClient.SendText(roomID, "Now send me the content of the email. One message is one line. If you want to send or cancel enter !send or !cancel")
+	} else {
+		if message == "!send" {
+			account, err := getSMTPAccount(string(roomID))
+			if err != nil {
+				WriteLog(critical, "#52 saveWritingtemp: "+err.Error())
+				matrixClient.SendText(roomID, "An server-error occured Errorcode: #52")
+				deleteWritingTemp(string(roomID))
+				return
+			}
+
+			m := gomail.NewMessage()
+			m.SetHeader("From", account.username)
+
+			if strings.Contains(writeTemp.receiver, ",") {
+				recEmails := strings.Split(writeTemp.receiver, ",")
+				m.SetHeader("To", recEmails...)
+			} else {
+				m.SetHeader("To", writeTemp.receiver)
+			}
+
+			m.SetHeader("Subject", writeTemp.subject)
+
+			if writeTemp.markdown {
+				toSendText := string(markdown.ToHTML([]byte(writeTemp.body), nil, nil))
+				toSendText = strings.ReplaceAll(toSendText, "\r\n<h", "<h")
+				toSendText = strings.ReplaceAll(toSendText, "\n\n<h", "<h")
+				toSendText = strings.ReplaceAll(toSendText, ">\n\n", ">")
+				toSendText = strings.ReplaceAll(toSendText, "\r\n", "<br>")
+				m.SetBody("text/html", toSendText)
+
+				plainbody := writeTemp.body
+				plainbody = strings.ReplaceAll(plainbody, "<br>", "\r\n")
+				m.AddAlternative("text/plain", plainbody)
+			} else {
+				m.SetBody("text/plain", writeTemp.body)
+			}
+
+			attachments, err := getAttachments(writeTemp.pkID)
+			if err == nil {
+				for _, i := range attachments {
+					matrixClient.SendText(roomID, "Attaching file: "+i)
+					m.Attach(tempDir + i)
+				}
+			} else {
+				matrixClient.SendText(roomID, "coulnd't attach files: "+err.Error())
+			}
+
+			d := gomail.NewDialer(account.host, account.port, account.username, account.password)
+			if account.ignoreSSL {
+				d.TLSConfig = &tls.Config{InsecureSkipVerify: true}
+			}
+			matrixClient.SendText(roomID, "Sending...")
+			if err := d.DialAndSend(m); err != nil {
+				WriteLog(logError, "#46 DialAndSend: "+err.Error())
+				matrixClient.SendText(roomID, "An server-error occured Errorcode: #53\r\n"+err.Error())
+				removeSMTPAccount(string(roomID))
+				matrixClient.SendText(roomID, "To fix this errer you have to run !setup smtp .... again")
+				deleteWritingTemp(string(roomID))
+				return
+			}
+			matrixClient.SendText(roomID, "Message sent successfully")
+			deleteWritingTemp(string(roomID))
+		} else if message == "!cancel" {
+			matrixClient.SendText(roomID, "Mail canceled")
+			deleteWritingTemp(string(roomID))
+			return
+		} else if strings.HasPrefix(message, "!rm") && len(strings.Split(message, " ")) > 0 {
+			splitted := strings.Split(message, " ")[1:]
+			var fileName string
+			for _, a := range splitted {
+				fileName += a + " "
+			}
+			fileName = strings.TrimRight(fileName, " ")
+			fileName = strings.TrimLeft(fileName, " ")
+			fmt.Println(fileName)
+			err := deleteAttachment(fileName, writeTemp.pkID)
+			if err != nil {
+				matrixClient.SendText(roomID, "Couldn't delete attachment: "+err.Error())
+				return
+			}
+			_ = os.Remove(tempDir + fileName)
+			matrixClient.SendText(roomID, "Attachment deleted!")
+
+		} else {
+			if evt.Content.AsMessage().MsgType == event.MsgText {
+				if len(strings.ReplaceAll(writeTemp.body, " ", "")) == 0 {
+					err = saveWritingtemp(string(roomID), "body", message+"\r\n")
+				} else {
+					err = saveWritingtemp(string(roomID), "body", writeTemp.body+message+"\r\n")
+				}
+				if err != nil {
+					WriteLog(critical, "#54 saveWritingtemp: "+err.Error())
+					matrixClient.SendText(roomID, "An server-error occured Errorcode: #54")
+					deleteWritingTemp(string(roomID))
+					return
+				}
+			} else if evt.Content.AsMessage().MsgType == event.MsgFile || evt.Content.AsMessage().MsgType == event.MsgImage {
+				if strings.HasPrefix(string(evt.Content.AsMessage().URL), "mxc://") {
+					reader, err := matrixClient.Download(id.MustParseContentURI(evt.Content.AsMessage().Body))
+					if err != nil {
+						matrixClient.SendText(roomID, "Couldn't download File: "+err.Error())
+					} else {
+						filename := strconv.Itoa(int(time.Now().Unix())) + "_" + evt.Content.AsMessage().Body
+						err := streamToTempFile(reader, filename)
+						if err != nil {
+							matrixClient.SendText(roomID, "Couldn't download file: "+err.Error())
+						} else {
+							addEmailAttachment(writeTemp.pkID, filename)
+							matrixClient.SendText(roomID, "File "+filename+" attached!")
+						}
+					}
+				}
+			}
+
 		}
 	}
 }
@@ -547,164 +679,5 @@ func runCommand(message string, evt *event.Event) {
 		} else {
 			matrixClient.SendText(evt.RoomID, "command not found!")
 		}
-	}
-}
-
-func handleMessageEvent(source mautrix.EventSource, evt *event.Event) {
-	client := matrixClient
-	if evt.Sender == client.UserID {
-		return
-	}
-	currentMembership, timestamp := store.GetMembershipState(evt.RoomID)
-	if currentMembership == event.MembershipLeave || timestamp > evt.Timestamp {
-		return
-	}
-	message := evt.Content.AsMessage().Body
-	roomID := evt.RoomID
-
-	if is, err := isUserWritingEmail(string(roomID)); is && err == nil {
-		writeTemp, err := getWritingTemp(string(roomID))
-		if err != nil {
-			WriteLog(critical, "#43 getWritingTemp: "+err.Error())
-			client.SendText(roomID, "An server-error occured Errorcode: #43")
-			deleteWritingTemp(string(roomID))
-			return
-		}
-		if len(strings.Trim(writeTemp.subject, " ")) == 0 {
-			if evt.Content.AsMessage().MsgType != event.MsgText {
-				client.SendText(roomID, "You have to send a text for subject!")
-				return
-			}
-			err = saveWritingtemp(string(roomID), "subject", message)
-			if err != nil {
-				WriteLog(critical, "#44 saveWritingtemp: "+err.Error())
-				client.SendText(roomID, "An server-error occured Errorcode: #44")
-				deleteWritingTemp(string(roomID))
-				return
-			}
-			client.SendText(roomID, "Now send me the content of the email. One message is one line. If you want to send or cancel enter !send or !cancel")
-		} else {
-			if message == "!send" {
-				account, err := getSMTPAccount(string(roomID))
-				if err != nil {
-					WriteLog(critical, "#52 saveWritingtemp: "+err.Error())
-					client.SendText(roomID, "An server-error occured Errorcode: #52")
-					deleteWritingTemp(string(roomID))
-					return
-				}
-
-				m := gomail.NewMessage()
-				m.SetHeader("From", account.username)
-
-				if strings.Contains(writeTemp.receiver, ",") {
-					recEmails := strings.Split(writeTemp.receiver, ",")
-					m.SetHeader("To", recEmails...)
-				} else {
-					m.SetHeader("To", writeTemp.receiver)
-				}
-
-				m.SetHeader("Subject", writeTemp.subject)
-
-				if writeTemp.markdown {
-					toSendText := string(markdown.ToHTML([]byte(writeTemp.body), nil, nil))
-					toSendText = strings.ReplaceAll(toSendText, "\r\n<h", "<h")
-					toSendText = strings.ReplaceAll(toSendText, "\n\n<h", "<h")
-					toSendText = strings.ReplaceAll(toSendText, ">\n\n", ">")
-					toSendText = strings.ReplaceAll(toSendText, "\r\n", "<br>")
-					m.SetBody("text/html", toSendText)
-
-					plainbody := writeTemp.body
-					plainbody = strings.ReplaceAll(plainbody, "<br>", "\r\n")
-					m.AddAlternative("text/plain", plainbody)
-				} else {
-					m.SetBody("text/plain", writeTemp.body)
-				}
-
-				attachments, err := getAttachments(writeTemp.pkID)
-				if err == nil {
-					for _, i := range attachments {
-						client.SendText(roomID, "Attaching file: "+i)
-						m.Attach(tempDir + i)
-					}
-				} else {
-					client.SendText(roomID, "coulnd't attach files: "+err.Error())
-				}
-
-				d := gomail.NewDialer(account.host, account.port, account.username, account.password)
-				if account.ignoreSSL {
-					d.TLSConfig = &tls.Config{InsecureSkipVerify: true}
-				}
-				client.SendText(roomID, "Sending...")
-				if err := d.DialAndSend(m); err != nil {
-					WriteLog(logError, "#46 DialAndSend: "+err.Error())
-					client.SendText(roomID, "An server-error occured Errorcode: #53\r\n"+err.Error())
-					removeSMTPAccount(string(roomID))
-					client.SendText(roomID, "To fix this errer you have to run !setup smtp .... again")
-					deleteWritingTemp(string(roomID))
-					return
-				}
-				client.SendText(roomID, "Message sent successfully")
-				deleteWritingTemp(string(roomID))
-			} else if message == "!cancel" {
-				client.SendText(roomID, "Mail canceled")
-				deleteWritingTemp(string(roomID))
-				return
-			} else if strings.HasPrefix(message, "!rm") && len(strings.Split(message, " ")) > 0 {
-				splitted := strings.Split(message, " ")[1:]
-				var fileName string
-				for _, a := range splitted {
-					fileName += a + " "
-				}
-				fileName = strings.TrimRight(fileName, " ")
-				fileName = strings.TrimLeft(fileName, " ")
-				fmt.Println(fileName)
-				err := deleteAttachment(fileName, writeTemp.pkID)
-				if err != nil {
-					client.SendText(roomID, "Couldn't delete attachment: "+err.Error())
-					return
-				}
-				_ = os.Remove(tempDir + fileName)
-				client.SendText(roomID, "Attachment deleted!")
-
-			} else {
-				if evt.Content.AsMessage().MsgType == event.MsgText {
-					if len(strings.ReplaceAll(writeTemp.body, " ", "")) == 0 {
-						err = saveWritingtemp(string(roomID), "body", message+"\r\n")
-					} else {
-						err = saveWritingtemp(string(roomID), "body", writeTemp.body+message+"\r\n")
-					}
-					if err != nil {
-						WriteLog(critical, "#54 saveWritingtemp: "+err.Error())
-						client.SendText(roomID, "An server-error occured Errorcode: #54")
-						deleteWritingTemp(string(roomID))
-						return
-					}
-				} else if evt.Content.AsMessage().MsgType == event.MsgFile || evt.Content.AsMessage().MsgType == event.MsgImage {
-					if strings.HasPrefix(string(evt.Content.AsMessage().URL), "mxc://") {
-						reader, err := client.Download(id.MustParseContentURI(evt.Content.AsMessage().Body))
-						if err != nil {
-							client.SendText(roomID, "Couldn't download File: "+err.Error())
-						} else {
-							filename := strconv.Itoa(int(time.Now().Unix())) + "_" + evt.Content.AsMessage().Body
-							err := streamToTempFile(reader, filename)
-							if err != nil {
-								client.SendText(roomID, "Couldn't download file: "+err.Error())
-							} else {
-								addEmailAttachment(writeTemp.pkID, filename)
-								client.SendText(roomID, "File "+filename+" attached!")
-							}
-						}
-					}
-				}
-
-			}
-		}
-	} else if err != nil {
-		WriteLog(critical, "#41 deleteWritingTemp: "+err.Error())
-		client.SendText(roomID, "An server-error occured Errorcode: #41")
-		return
-	} else {
-		//commands only available in room not bridged to email
-		runCommand(message, evt)
 	}
 }

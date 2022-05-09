@@ -139,43 +139,62 @@ func logOut(client *mautrix.Client, roomID string, leave bool) error {
 	return nil
 }
 
-func handleStateEvent(source mautrix.EventSource, evt *event.Event) {
-	client := matrixClient
-	store.UpdateRoomState(evt.RoomID, evt)
-	if id.UserID(*evt.StateKey) == client.UserID {
-		currentMembership, _ := store.GetMembershipState(evt.RoomID)
-		if source == mautrix.EventSourceInvite|mautrix.EventSourceState && currentMembership == event.MembershipInvite {
-			fmt.Println("invited...")
-			host, err := getHostFromMatrixID(string(evt.Sender))
-			if err == -1 {
-				listcontains := contains(viper.GetStringSlice("allowed_servers"), host)
-				if listcontains {
-					client.JoinRoomByID(evt.RoomID)
-					client.SendText(evt.RoomID, "Hey you have invited me to a new room. Enter !login to bridge this room to a Mail account")
-				} else {
-					client.LeaveRoom(evt.RoomID)
-					WriteLog(info, string("Got invalid invite from "+evt.Sender+" reason: senders server not whitelisted! Adjust your config if you want to allow this host using me"))
-					return
-				}
-			} else {
-				WriteLog(critical, "")
-			}
-		}
-		if source == mautrix.EventSourceLeave|mautrix.EventSourceTimeline && currentMembership == event.MembershipLeave {
-			fmt.Println("leaving...")
-			logOut(client, string(evt.RoomID), true)
-		}
-	}
-}
-
 func startMatrixSync() {
 	fmt.Println(matrixClient.UserID)
 
 	syncer := matrixClient.Syncer.(*mautrix.DefaultSyncer)
 
-	syncer.OnEventType(event.StateMember, handleStateEvent)
+	syncer.OnEventType(event.StateMember, func(source mautrix.EventSource, evt *event.Event) {
+		client := matrixClient
+		store.UpdateRoomState(evt.RoomID, evt)
+		if id.UserID(*evt.StateKey) == client.UserID {
+			currentMembership, _ := store.GetMembershipState(evt.RoomID)
+			if source == mautrix.EventSourceInvite|mautrix.EventSourceState && currentMembership == event.MembershipInvite {
+				fmt.Println("invited...")
+				host, err := getHostFromMatrixID(string(evt.Sender))
+				if err == -1 {
+					listcontains := contains(viper.GetStringSlice("allowed_servers"), host)
+					if listcontains {
+						client.JoinRoomByID(evt.RoomID)
+						client.SendText(evt.RoomID, "Hey you have invited me to a new room. Enter !login to bridge this room to a Mail account")
+					} else {
+						client.LeaveRoom(evt.RoomID)
+						WriteLog(info, string("Got invalid invite from "+evt.Sender+" reason: senders server not whitelisted! Adjust your config if you want to allow this host using me"))
+						return
+					}
+				} else {
+					WriteLog(critical, "")
+				}
+			}
+			if source == mautrix.EventSourceLeave|mautrix.EventSourceTimeline && currentMembership == event.MembershipLeave {
+				fmt.Println("leaving...")
+				logOut(client, string(evt.RoomID), true)
+			}
+		}
+	})
 
-	syncer.OnEventType(event.EventMessage, handleMessageEvent)
+	syncer.OnEventType(event.EventMessage, func(source mautrix.EventSource, evt *event.Event) {
+		if evt.Sender == matrixClient.UserID {
+			return
+		}
+		currentMembership, timestamp := store.GetMembershipState(evt.RoomID)
+		if currentMembership == event.MembershipLeave || timestamp > evt.Timestamp {
+			return
+		}
+		message := evt.Content.AsMessage().Body
+		roomID := evt.RoomID
+
+		if is, err := isUserWritingEmail(string(roomID)); is && err == nil {
+			writingEmail(evt, message)
+		} else if err != nil {
+			WriteLog(critical, "#41 deleteWritingTemp: "+err.Error())
+			matrixClient.SendText(roomID, "An server-error occured Errorcode: #41")
+			return
+		} else {
+			//commands only available in room not bridged to email
+			runCommand(message, evt)
+		}
+	})
 
 	err := matrixClient.Sync()
 	if err != nil {
@@ -184,8 +203,8 @@ func startMatrixSync() {
 	}
 }
 
-func viewViewHelp(roomID string, client *mautrix.Client) {
-	client.SendText(id.RoomID(roomID), "Available options:\n\nmb/mailbox\t-\tViews the current used mailbox\nmbs/mailboxes\t-\tView the available mailboxes\nbl/blocklist\t-\tViews the list of blocked addresses")
+func viewViewHelp(roomID string) {
+	matrixClient.SendText(id.RoomID(roomID), "Available options:\n\nmb/mailbox\t-\tViews the current used mailbox\nmbs/mailboxes\t-\tView the available mailboxes\nbl/blocklist\t-\tViews the list of blocked addresses")
 }
 
 func deleteTempFile(name string) {
