@@ -1,4 +1,4 @@
-FROM golang:1.16.0-alpine as builder
+FROM golang:1.18-alpine as builder
 
 WORKDIR /app/matrixemailbridge
 
