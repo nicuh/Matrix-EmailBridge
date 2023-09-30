@@ -37,13 +37,12 @@ func help(evt *event.Event, message string) {
 	helpText += "!setup imap/smtp, host:port, username(em@ail.com), password, <mailbox (only for imap)>, ignoreSSLcert(true/false) - creates a bridge for this room\r\n"
 	helpText += "!ping - gets information about the email bridge for this room\r\n"
 	helpText += "!help - shows this command help overview\r\n"
-	helpText += "!write (receiver(s) email(s) splitted by space!) <markdown default:true>- sends an email to a given address\r\n"
-	helpText += "!mailboxes - shows a list with all mailboxes available on your IMAP server\r\n"
+	helpText += "!write (receiver(s) email(s) splitted by space!) <markdown default:true> - sends an email to a given address\r\n"
+	helpText += "!view - run it to see available optinos\r\n"
 	helpText += "!setmailbox (mailbox) - changes the mailbox for the room\r\n"
-	helpText += "!mailbox - shows the currently selected mailbox\r\n"
 	helpText += "!sethtml (on/off or true/false) - sets HTML-rendering for messages on/off\r\n"
-	helpText += "!logout remove email bridge from current room\r\n"
-	helpText += "!leave unbridge the current room and kick the bot\r\n"
+	helpText += "!logout - remove email bridge from current room\r\n"
+	helpText += "!leave - unbridge the current room and kick the bot\r\n"
 	helpText += "\r\n---- Email writing commands ----\r\n"
 	helpText += "!send - sends the email\r\n"
 	helpText += "!rm <file> - removes given attachment from email\r\n"
@@ -501,11 +500,10 @@ func view(evt *event.Event, message string) {
 		matrixClient.SendText(roomID, "You need to login with an imap account to use this command!")
 		return
 	}
-	sm := strings.Split(message, " ")
-	if len(sm) == 1 {
+	if len(message) == 0 {
 		viewViewHelp(roomID.String())
-	} else if len(sm) > 1 {
-		switch strings.ToLower(sm[1]) {
+	} else {
+		switch strings.ToLower(message) {
 		case "mb", "mailbox":
 			{
 				viewMailbox(roomID.String(), matrixClient)
