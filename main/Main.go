@@ -454,18 +454,17 @@ func handleMail(mail *imap.Message, section *imap.BodySectionName, account imapA
 			return
 		}
 	}
-	from := html.EscapeString(content.from)
 	fmt.Println("attachments: " + content.attachment)
-	body := content.body
+	plainContent := "You've got a new Email from " + content.from + "\r\n" + "Subject: " + content.subject + "\r\n────────────────\r\n" + content.body
+	messageContent := &event.MessageEventContent{
+		Body:    plainContent,
+		MsgType: event.MsgText,
+	}
 	if content.htmlFormat {
-		body = string(markdown.ToHTML([]byte(content.body), nil, nil))
+		from := html.EscapeString(content.from)
+		body := string(markdown.ToHTML([]byte(content.body), nil, nil))
+		messageContent.Format = event.FormatHTML
+		messageContent.FormattedBody = "<b>You've got a new Email</b> from <b>" + from + "</b><br>" + "Subject: " + content.subject + "<br>────────────────<br>" + body
 	}
-	headerContent := &event.MessageEventContent{
-		Format:        event.FormatHTML,
-		Body:          "You've got a new Email from " + from + "\r\n" + "Subject: " + content.subject + "\r\n" + content.body,
-		FormattedBody: "<b>You've got a new Email</b> from <b>" + from + "</b><br>" + "Subject: " + content.subject + "<br>────────────────<br>" + body,
-		MsgType:       event.MsgText,
-	}
-
-	matrixClient.SendMessageEvent(id.RoomID(account.roomID), event.EventMessage, &headerContent)
+	matrixClient.SendMessageEvent(id.RoomID(account.roomID), event.EventMessage, &messageContent)
 }
