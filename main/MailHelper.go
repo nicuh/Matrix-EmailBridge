@@ -7,9 +7,10 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"maunium.net/go/mautrix/id"
 	"strings"
 	"time"
+
+	"maunium.net/go/mautrix/id"
 
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/client"
@@ -33,6 +34,11 @@ func loginMail(host, username, password string, ignoreSSL bool) (*client.Client,
 	return ailClient, nil
 }
 
+func checkNewEmail(roomID string, mClient *mautrix.Client) {
+	// mailbox, _ := getMailbox(roomID)
+	// mbox, _ := client.Client.Select(mailbox, false)
+}
+
 func getMails(mClient *client.Client, mBox string, messages chan *imap.Message) (*imap.BodySectionName, int) {
 	mbox, err := mClient.Select(mBox, false)
 	if err != nil {
@@ -50,6 +56,7 @@ func getMails(mClient *client.Client, mBox string, messages chan *imap.Message) 
 		return nil, 1
 	}
 
+	fmt.Println("New messages " + fmt.Sprint(mbox.Unseen))
 	seqSet := new(imap.SeqSet)
 	maxMessages := uint32(5)
 	if mbox.Messages < maxMessages {

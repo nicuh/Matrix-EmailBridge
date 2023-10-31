@@ -30,6 +30,11 @@ var commands = map[string]CommandHandler{
 	"!blocklist":  blocklist,
 	"!bl":         blocklist,
 	"!view":       view,
+	"!check":      check,
+}
+
+func check(evt *event.Event, message string) {
+	checkNewEmail(evt.RoomID.String(), matrixClient)
 }
 
 func help(evt *event.Event, message string) {
